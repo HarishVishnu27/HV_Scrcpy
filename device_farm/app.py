@@ -18,6 +18,9 @@ import time
 from typing import Dict, List, Optional, Set
 import weakref
 
+from video_stream import ScreenStreamServer
+from demo_devices import MockDeviceManager, MockScreenStreamServer
+
 try:
     import websockets
 except ImportError:
@@ -46,6 +49,8 @@ class DeviceManager:
     
     def __init__(self):
         self.devices = {}
+        self.use_mock = False
+        self.mock_manager = None
         self.refresh_devices()
     
     def refresh_devices(self):
@@ -72,19 +77,37 @@ class DeviceManager:
                         }
             
             self.devices = devices
+            self.use_mock = False
             logger.info(f"Found {len(devices)} connected devices")
+            
+            # If no real devices found, fall back to mock devices
+            if len(devices) == 0:
+                logger.info("No real devices found, using mock devices for demonstration")
+                self.use_mock = True
+                self.mock_manager = MockDeviceManager()
             
         except subprocess.CalledProcessError as e:
             logger.error(f"Failed to get device list: {e}")
+            self._setup_mock_devices()
         except FileNotFoundError:
-            logger.error("ADB not found in PATH")
+            logger.error("ADB not found in PATH, using mock devices for demonstration")
+            self._setup_mock_devices()
+    
+    def _setup_mock_devices(self):
+        """Setup mock devices for demonstration"""
+        self.use_mock = True
+        self.mock_manager = MockDeviceManager()
     
     def get_devices(self) -> List[Dict]:
         """Get list of available devices"""
+        if self.use_mock and self.mock_manager:
+            return self.mock_manager.get_devices()
         return list(self.devices.values())
     
     def get_device(self, device_id: str) -> Optional[Dict]:
         """Get specific device info"""
+        if self.use_mock and self.mock_manager:
+            return self.mock_manager.get_device(device_id)
         return self.devices.get(device_id)
 
 class ScrcpyManager:
@@ -313,6 +336,14 @@ class DeviceFarmApp:
         self.scrcpy_manager = ScrcpyManager()
         self.signaling_server = WebRTCSignalingServer()
         
+        # Use real or mock screen streaming based on device availability
+        if self.device_manager.use_mock:
+            logger.info("Using mock screen streaming for demonstration")
+            self.screen_stream_server = MockScreenStreamServer()
+        else:
+            logger.info("Using real device screen streaming")
+            self.screen_stream_server = ScreenStreamServer()
+        
         self.app = web.Application()
         self.setup_routes()
         
@@ -505,20 +536,27 @@ class DeviceFarmApp:
         }
         
         function initWebRTC(deviceId) {
-            // WebRTC implementation placeholder
-            // This would establish a WebRTC connection to receive the device stream
-            console.log('Initializing WebRTC for device:', deviceId);
-            
-            // For now, just show a placeholder message
-            setTimeout(() => {
+            // Join video stream via WebSocket
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.send(JSON.stringify({
+                    type: 'join_stream',
+                    device_id: deviceId
+                }));
+                
+                console.log('Joining video stream for device:', deviceId);
+                
+                // Show connecting message
                 const videoContainer = document.getElementById(`video-${deviceId}`);
                 if (videoContainer) {
                     videoContainer.innerHTML = `
-                        <p class="connected">WebRTC streaming ready (implementation pending)</p>
-                        <p>Device ${deviceId} is streaming via scrcpy</p>
+                        <p class="connecting">Connecting to device stream...</p>
+                        <canvas id="canvas-${deviceId}" width="480" height="800" style="border: 1px solid #ccc; max-width: 100%;"></canvas>
                     `;
                 }
-            }, 2000);
+            } else {
+                console.error('WebSocket not connected');
+                setTimeout(() => initWebRTC(deviceId), 1000);
+            }
         }
         
         function connectWebSocket() {
@@ -534,7 +572,11 @@ class DeviceFarmApp:
             ws.onmessage = function(event) {
                 const message = JSON.parse(event.data);
                 console.log('WebSocket message:', message);
-                // Handle WebRTC signaling messages
+                
+                // Handle video frames
+                if (message.type === 'video_frame') {
+                    displayVideoFrame(message.device_id, message.frame_data);
+                }
             };
             
             ws.onclose = function() {
@@ -546,6 +588,45 @@ class DeviceFarmApp:
             ws.onerror = function(error) {
                 console.error('WebSocket error:', error);
             };
+        }
+        
+        function displayVideoFrame(deviceId, frameData) {
+            const canvas = document.getElementById(`canvas-${deviceId}`);
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            const img = new Image();
+            
+            img.onload = function() {
+                // Calculate aspect ratio and resize canvas if needed
+                const aspectRatio = img.width / img.height;
+                const maxWidth = 480;
+                const maxHeight = 800;
+                
+                let newWidth, newHeight;
+                if (aspectRatio > maxWidth / maxHeight) {
+                    newWidth = maxWidth;
+                    newHeight = maxWidth / aspectRatio;
+                } else {
+                    newHeight = maxHeight;
+                    newWidth = maxHeight * aspectRatio;
+                }
+                
+                canvas.width = newWidth;
+                canvas.height = newHeight;
+                
+                // Draw the image
+                ctx.drawImage(img, 0, 0, newWidth, newHeight);
+                
+                // Update status
+                const statusText = document.querySelector(`#video-${deviceId} .connecting`);
+                if (statusText) {
+                    statusText.textContent = 'Streaming...';
+                    statusText.className = 'connected';
+                }
+            };
+            
+            img.src = 'data:image/png;base64,' + frameData;
         }
         
         // Initialize the application
@@ -579,9 +660,11 @@ class DeviceFarmApp:
                 status=404
             )
         
-        result = self.scrcpy_manager.start_streaming(device_id)
-        if result:
-            return web.json_response(result)
+        # Start screen streaming
+        stream_result = self.screen_stream_server.start_screen_stream(device_id)
+        
+        if stream_result:
+            return web.json_response(stream_result)
         else:
             return web.json_response(
                 {'error': 'Failed to start streaming'}, 
@@ -592,8 +675,11 @@ class DeviceFarmApp:
         """API endpoint to stop device streaming"""
         device_id = request.match_info['device_id']
         
-        success = self.scrcpy_manager.stop_streaming(device_id)
-        if success:
+        # Stop both scrcpy and screen streaming
+        scrcpy_stopped = self.scrcpy_manager.stop_streaming(device_id)
+        screen_stopped = self.screen_stream_server.stop_screen_stream(device_id)
+        
+        if scrcpy_stopped or screen_stopped:
             return web.json_response({'status': 'stopped'})
         else:
             return web.json_response(
@@ -605,9 +691,15 @@ class DeviceFarmApp:
         """API endpoint to get device streaming status"""
         device_id = request.match_info['device_id']
         
-        info = self.scrcpy_manager.get_streaming_info(device_id)
-        if info:
-            return web.json_response(info)
+        # Check both scrcpy and screen streaming status
+        scrcpy_info = self.scrcpy_manager.get_streaming_info(device_id)
+        screen_info = self.screen_stream_server.get_stream_info(device_id)
+        
+        if scrcpy_info or screen_info:
+            return web.json_response({
+                'scrcpy': scrcpy_info,
+                'screen_stream': screen_info
+            })
         else:
             return web.json_response(
                 {'status': 'not_streaming'}, 
@@ -615,19 +707,39 @@ class DeviceFarmApp:
             )
     
     async def websocket_handler(self, request):
-        """WebSocket handler for WebRTC signaling"""
+        """WebSocket handler for WebRTC signaling and video streaming"""
         ws = web_ws.WebSocketResponse()
         await ws.prepare(request)
         
         client_id = f"client_{id(ws)}"
         await self.signaling_server.register_client(client_id, ws)
         
+        current_device_id = None
+        
         try:
             async for msg in ws:
                 if msg.type == aiohttp.WSMsgType.TEXT:
                     try:
                         data = json.loads(msg.data)
+                        msg_type = data.get('type')
+                        
+                        if msg_type == 'join_stream':
+                            device_id = data.get('device_id')
+                            if device_id:
+                                # Add client to video stream
+                                self.screen_stream_server.add_client(device_id, ws)
+                                current_device_id = device_id
+                                logger.info(f"Client {client_id} joined video stream for device {device_id}")
+                        
+                        elif msg_type == 'leave_stream':
+                            if current_device_id:
+                                self.screen_stream_server.remove_client(current_device_id, ws)
+                                current_device_id = None
+                                logger.info(f"Client {client_id} left video stream")
+                        
+                        # Handle other signaling messages
                         await self.signaling_server.handle_message(client_id, data)
+                        
                     except json.JSONDecodeError:
                         await self.signaling_server.send_error(client_id, "Invalid JSON")
                 elif msg.type == aiohttp.WSMsgType.ERROR:
@@ -635,6 +747,9 @@ class DeviceFarmApp:
         except Exception as e:
             logger.error(f"WebSocket handler error: {e}")
         finally:
+            # Clean up client connections
+            if current_device_id:
+                self.screen_stream_server.remove_client(current_device_id, ws)
             await self.signaling_server.unregister_client(client_id)
         
         return ws
@@ -646,6 +761,10 @@ class DeviceFarmApp:
         # Stop all streaming processes
         for device_id in list(self.scrcpy_manager.processes.keys()):
             self.scrcpy_manager.stop_streaming(device_id)
+        
+        # Stop all screen streams
+        for device_id in list(self.screen_stream_server.streams.keys()):
+            self.screen_stream_server.stop_screen_stream(device_id)
         
         logger.info("Cleanup completed")
     
