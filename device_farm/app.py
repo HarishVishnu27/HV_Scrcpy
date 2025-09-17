@@ -307,7 +307,11 @@ class WebRTCSignalingServer:
         if client_id in self.clients:
             websocket = self.clients[client_id]
             try:
-                await websocket.send(json.dumps(message))
+                # Use the correct method for aiohttp WebSocket
+                if hasattr(websocket, 'send_str'):
+                    await websocket.send_str(json.dumps(message))
+                else:
+                    await websocket.send(json.dumps(message))
             except Exception as e:
                 logger.error(f"Failed to send message to client {client_id}: {e}")
                 await self.unregister_client(client_id)

@@ -161,7 +161,11 @@ class ScreenStreamServer:
         
         for websocket in self.clients[device_id].copy():
             try:
-                await websocket.send(json.dumps(message))
+                # Use the correct method for aiohttp WebSocket
+                if hasattr(websocket, 'send_str'):
+                    await websocket.send_str(json.dumps(message))
+                else:
+                    await websocket.send(json.dumps(message))
             except Exception as e:
                 logger.warning(f"Failed to send frame to client: {e}")
                 disconnected_clients.add(websocket)

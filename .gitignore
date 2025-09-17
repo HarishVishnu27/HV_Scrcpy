@@ -8,3 +8,19 @@ build/
 /x/
 local.properties
 /scrcpy-server
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+.coverage
+.pytest_cache/
+
+# Device Farm specific
+device_farm/*.log

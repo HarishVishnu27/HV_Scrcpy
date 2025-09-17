@@ -180,7 +180,11 @@ class MockScreenStreamServer:
         
         for websocket in self.clients[device_id].copy():
             try:
-                await websocket.send(json.dumps(message))
+                # Use the correct method for aiohttp WebSocket
+                if hasattr(websocket, 'send_str'):
+                    await websocket.send_str(json.dumps(message))
+                else:
+                    await websocket.send(json.dumps(message))
             except Exception as e:
                 disconnected_clients.add(websocket)
         
