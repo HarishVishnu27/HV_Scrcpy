@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Control - {{ device_info.model }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/device-control.css') }}">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js" 
+            integrity="sha384-mZLF4UVrpi/QTWPA7BjNPEnkIfRFn9ZnavAfoleR4euo+DbWCNMliJIzegfRZRzn" 
+            crossorigin="anonymous"></script>
+</head>
+<body>
+    <div class="control-container">
+        <header class="control-header">
+            <div class="device-info">
+                <h1>{{ device_info.model }}</h1>
+                <span class="device-id">{{ device_id }}</span>
+            </div>
+            <div class="control-actions">
+                <button id="disconnect-btn" class="btn btn-danger">Disconnect</button>
+                <a href="/" class="btn btn-secondary">Back to List</a>
+            </div>
+        </header>
+
+        <main class="control-main">
+            <div class="video-container">
+                <div class="video-wrapper">
+                    <video id="device-video" autoplay playsinline muted>
+                        <p>Your browser doesn't support video streaming</p>
+                    </video>
+                    <div class="video-overlay" id="video-overlay">
+                        <div class="loading-spinner">
+                            <div class="spinner"></div>
+                            <p>Connecting to device...</p>
+                        </div>
+                    </div>
+                    <canvas id="touch-canvas" style="display: none;"></canvas>
+                </div>
+                
+                <div class="video-controls">
+                    <button id="fullscreen-btn" class="btn btn-secondary">Fullscreen</button>
+                    <button id="screenshot-btn" class="btn btn-secondary">Screenshot</button>
+                    <button id="home-btn" class="btn btn-secondary">Home</button>
+                    <button id="back-btn" class="btn btn-secondary">Back</button>
+                    <button id="menu-btn" class="btn btn-secondary">Menu</button>
+                </div>
+            </div>
+
+            <div class="control-panel">
+                <div class="panel-section">
+                    <h3>Device Status</h3>
+                    <div id="device-status">
+                        <p><strong>Status:</strong> <span id="connection-status">Connecting...</span></p>
+                        <p><strong>Resolution:</strong> {{ device_info.resolution }}</p>
+                        <p><strong>Android:</strong> {{ device_info.android_version }}</p>
+                        {% if device_info.battery >= 0 %}
+                        <p><strong>Battery:</strong> {{ device_info.battery }}%</p>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>Quick Actions</h3>
+                    <div class="quick-actions">
+                        <button class="action-btn" data-action="power">Power</button>
+                        <button class="action-btn" data-action="volume_up">Vol+</button>
+                        <button class="action-btn" data-action="volume_down">Vol-</button>
+                        <button class="action-btn" data-action="recent">Recent</button>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>Text Input</h3>
+                    <div class="text-input-section">
+                        <input type="text" id="text-input" placeholder="Type text to send to device...">
+                        <button id="send-text-btn" class="btn btn-primary">Send</button>
+                    </div>
+                </div>
+
+                <div class="panel-section">
+                    <h3>Connection Log</h3>
+                    <div id="connection-log"></div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/device-control.js') }}"></script>
+    <script>
+        // Initialize device control
+        document.addEventListener('DOMContentLoaded', function() {
+            const deviceId = '{{ device_id }}';
+            const deviceInfo = {{ device_info | tojson }};
+            window.deviceControl = new DeviceControl(deviceId, deviceInfo);
+        });
+    </script>
+</body>
+</html>
