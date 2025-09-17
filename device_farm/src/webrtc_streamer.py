@@ -13,14 +13,63 @@ import tempfile
 from typing import Dict, Optional, Any
 import logging
 
+# Try to import WebRTC dependencies, fallback to mock classes if not available
 try:
     from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack, RTCConfiguration, RTCIceServer
     from aiortc.contrib.media import MediaPlayer
     import cv2
     import numpy as np
+    WEBRTC_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: aiortc not available: {e}")
-    print("WebRTC functionality will be limited")
+    print("WebRTC functionality will be limited - using mock implementation")
+    WEBRTC_AVAILABLE = False
+    
+    # Mock classes for when aiortc is not available
+    class VideoStreamTrack:
+        def __init__(self):
+            pass
+    
+    class RTCPeerConnection:
+        def __init__(self, configuration=None):
+            self.connectionState = "new"
+            self.localDescription = None
+            
+        async def setRemoteDescription(self, desc):
+            pass
+            
+        async def createAnswer(self):
+            return type('MockAnswer', (), {'sdp': 'mock-sdp', 'type': 'answer'})()
+            
+        async def setLocalDescription(self, desc):
+            self.localDescription = desc
+            
+        def addTrack(self, track):
+            pass
+            
+        def on(self, event):
+            def decorator(func):
+                return func
+            return decorator
+            
+        async def addIceCandidate(self, candidate):
+            pass
+            
+        async def close(self):
+            pass
+    
+    class RTCConfiguration:
+        def __init__(self, iceServers=None):
+            pass
+    
+    class RTCIceServer:
+        def __init__(self, urls=None):
+            pass
+    
+    class RTCSessionDescription:
+        def __init__(self, sdp=None, type=None):
+            self.sdp = sdp
+            self.type = type
 
 class DeviceVideoTrack(VideoStreamTrack):
     """Custom video track that reads from device stream"""
@@ -81,6 +130,10 @@ class WebRTCStreamer:
     
     def create_connection(self, device_id: str) -> bool:
         """Create WebRTC connection for device"""
+        if not WEBRTC_AVAILABLE:
+            print(f"WebRTC not available, creating mock connection for {device_id}")
+            return True
+            
         if not self.loop:
             return False
         
@@ -176,6 +229,10 @@ class WebRTCStreamer:
     async def _create_demo_video_stream(self, device_id: str):
         """Create a demo video stream with generated content"""
         try:
+            if not WEBRTC_AVAILABLE:
+                print(f"WebRTC not available, skipping demo video for {device_id}")
+                return
+                
             import cv2
             import numpy as np
             from av import VideoFrame
@@ -263,6 +320,13 @@ class WebRTCStreamer:
     
     def handle_offer(self, device_id: str, offer: dict) -> Optional[dict]:
         """Handle WebRTC offer and return answer"""
+        if not WEBRTC_AVAILABLE:
+            print(f"WebRTC not available, returning mock answer for {device_id}")
+            return {
+                "sdp": "mock-answer-sdp",
+                "type": "answer"
+            }
+            
         if not self.loop:
             return None
         
