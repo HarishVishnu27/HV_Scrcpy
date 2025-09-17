@@ -1,0 +1,314 @@
+/* Device Control Page Styles */
+
+.control-container {
+    min-height: 100vh;
+    background-color: #f5f5f5;
+}
+
+.control-header {
+    background: white;
+    padding: 15px 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.device-info h1 {
+    color: #2c3e50;
+    margin-bottom: 5px;
+    font-size: 1.5em;
+}
+
+.device-id {
+    color: #7f8c8d;
+    font-size: 0.9em;
+    font-family: monospace;
+}
+
+.control-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.control-main {
+    padding: 20px;
+    display: grid;
+    grid-template-columns: 1fr 300px;
+    gap: 20px;
+    min-height: calc(100vh - 80px);
+}
+
+/* Video Container */
+.video-container {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    display: flex;
+    flex-direction: column;
+}
+
+.video-wrapper {
+    position: relative;
+    background: #000;
+    border-radius: 10px;
+    overflow: hidden;
+    flex: 1;
+    min-height: 400px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#device-video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    max-height: 80vh;
+}
+
+.video-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    text-align: center;
+}
+
+.video-overlay.hidden {
+    display: none;
+}
+
+.loading-spinner p {
+    margin-top: 15px;
+    font-size: 1.1em;
+}
+
+#touch-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+    z-index: 10;
+}
+
+.video-controls {
+    margin-top: 20px;
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+/* Control Panel */
+.control-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.panel-section {
+    background: white;
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.panel-section h3 {
+    color: #2c3e50;
+    margin-bottom: 15px;
+    font-size: 1.1em;
+}
+
+#device-status p {
+    margin-bottom: 8px;
+    color: #555;
+}
+
+#connection-status {
+    font-weight: bold;
+}
+
+.status-connected {
+    color: #2ecc71;
+}
+
+.status-connecting {
+    color: #f39c12;
+}
+
+.status-disconnected {
+    color: #e74c3c;
+}
+
+/* Quick Actions */
+.quick-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.action-btn {
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    background: #f8f9fa;
+    cursor: pointer;
+    transition: background-color 0.2s;
+    font-size: 0.9em;
+}
+
+.action-btn:hover {
+    background-color: #e9ecef;
+}
+
+.action-btn:active {
+    background-color: #dee2e6;
+}
+
+/* Text Input */
+.text-input-section {
+    display: flex;
+    gap: 10px;
+}
+
+#text-input {
+    flex: 1;
+    padding: 10px;
+    border: 1px solid #ddd;
+    border-radius: 5px;
+    font-size: 14px;
+}
+
+#text-input:focus {
+    outline: none;
+    border-color: #3498db;
+}
+
+/* Connection Log */
+#connection-log {
+    background-color: #ecf0f1;
+    border-radius: 5px;
+    padding: 15px;
+    min-height: 150px;
+    font-family: monospace;
+    font-size: 0.8em;
+    white-space: pre-wrap;
+    overflow-y: auto;
+    max-height: 200px;
+    border: 1px solid #ddd;
+}
+
+/* WebRTC Status Indicators */
+.webrtc-status {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    background: rgba(0, 0, 0, 0.7);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 15px;
+    font-size: 0.8em;
+    z-index: 20;
+}
+
+.webrtc-status.connected {
+    background: rgba(46, 204, 113, 0.8);
+}
+
+.webrtc-status.connecting {
+    background: rgba(243, 156, 18, 0.8);
+}
+
+.webrtc-status.disconnected {
+    background: rgba(231, 76, 60, 0.8);
+}
+
+/* Touch/Click indicators */
+.touch-indicator {
+    position: absolute;
+    border: 2px solid #3498db;
+    border-radius: 50%;
+    background: rgba(52, 152, 219, 0.3);
+    pointer-events: none;
+    animation: touch-ripple 0.6s ease-out;
+    z-index: 15;
+}
+
+@keyframes touch-ripple {
+    0% {
+        transform: scale(0);
+        opacity: 1;
+    }
+    100% {
+        transform: scale(1);
+        opacity: 0;
+    }
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+    .control-main {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto;
+    }
+    
+    .control-panel {
+        order: 2;
+    }
+}
+
+@media (max-width: 768px) {
+    .control-header {
+        flex-direction: column;
+        gap: 15px;
+        text-align: center;
+    }
+    
+    .control-main {
+        padding: 10px;
+        gap: 15px;
+    }
+    
+    .video-controls {
+        justify-content: flex-start;
+    }
+    
+    .text-input-section {
+        flex-direction: column;
+    }
+    
+    .quick-actions {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* Fullscreen styles */
+.video-wrapper.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 1000;
+    background: #000;
+    border-radius: 0;
+}
+
+.video-wrapper.fullscreen #device-video {
+    width: 100%;
+    height: 100%;
+}
+
+.video-wrapper.fullscreen .video-overlay {
+    border-radius: 0;
+}
