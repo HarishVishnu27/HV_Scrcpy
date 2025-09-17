@@ -1,0 +1,20 @@
+# Device Farm specific files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.log
+.venv/
+venv/
+.env
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
