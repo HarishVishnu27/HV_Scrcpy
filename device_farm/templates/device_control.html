@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Device Control - Android Screen Mirror</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+    <style>
+        .device-screen {
+            border: 2px solid #ddd;
+            border-radius: 15px;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 600px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .device-screen img {
+            max-width: 100%;
+            max-height: 100%;
+            height: auto;
+            width: auto;
+            border-radius: 10px;
+        }
+        
+        .no-device {
+            color: #6c757d;
+            text-align: center;
+            padding: 2rem;
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        
+        .status-connected {
+            background-color: #28a745;
+            animation: pulse 2s infinite;
+        }
+        
+        .status-disconnected {
+            background-color: #dc3545;
+        }
+        
+        .status-connecting {
+            background-color: #ffc107;
+            animation: spin 1s linear infinite;
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .device-info {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        
+        .refresh-btn {
+            animation: none;
+        }
+        
+        .refresh-btn.spinning {
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <header class="bg-primary text-white p-3 mb-4">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <h1 class="h3 mb-0">📱 Device Control</h1>
+                    <p class="mb-0">Real-time Android screen mirroring</p>
+                </div>
+                <a href="/" class="btn btn-outline-light">← Back to Home</a>
+            </div>
+        </header>
+
+        <div class="row">
+            <!-- Control Panel -->
+            <div class="col-md-4">
+                <div class="card mb-4">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0">Device Selection</h5>
+                        <button class="btn btn-sm btn-outline-primary refresh-btn" id="refreshDevices">
+                            🔄 Refresh
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="deviceList">
+                            <div class="text-center text-muted">
+                                <div class="spinner-border spinner-border-sm" role="status">
+                                    <span class="visually-hidden">Loading...</span>
+                                </div>
+                                <p class="mt-2">Scanning for devices...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card mb-4">
+                    <div class="card-header">
+                        <h5 class="mb-0">Connection Status</h5>
+                    </div>
+                    <div class="card-body">
+                        <div id="connectionStatus">
+                            <span class="status-indicator status-disconnected"></span>
+                            <span>Disconnected</span>
+                        </div>
+                        <div class="device-info mt-3" id="deviceInfo" style="display: none;">
+                            <strong>Device ID:</strong> <span id="currentDeviceId">-</span><br>
+                            <strong>Status:</strong> <span id="currentStatus">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Controls</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <button class="btn btn-success" id="connectBtn" disabled>
+                                📱 Connect Device
+                            </button>
+                            <button class="btn btn-danger" id="disconnectBtn" disabled>
+                                ❌ Disconnect
+                            </button>
+                            <button class="btn btn-info" id="screenshotBtn" disabled>
+                                📸 Take Screenshot
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Device Screen Display -->
+            <div class="col-md-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Device Screen</h5>
+                    </div>
+                    <div class="card-body p-2">
+                        <div class="device-screen" id="deviceScreen">
+                            <div class="no-device">
+                                <h3>📱</h3>
+                                <p>No device connected</p>
+                                <small class="text-muted">Select and connect a device to view its screen here</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- WebSocket and Socket.IO -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // WebSocket connection (with fallback)
+        let socket = null;
+        let socketConnected = false;
+        let pollInterval = null;
+        
+        // Try to initialize Socket.IO
+        try {
+            if (typeof io !== 'undefined') {
+                socket = io();
+                console.log('Using WebSocket mode');
+            }
+        } catch (e) {
+            console.log('WebSocket not available, using polling mode');
+        }
+        
+        let selectedDevice = null;
+        let isConnected = false;
+        
+        // DOM elements
+        const deviceList = document.getElementById('deviceList');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const deviceInfo = document.getElementById('deviceInfo');
+        const currentDeviceId = document.getElementById('currentDeviceId');
+        const currentStatus = document.getElementById('currentStatus');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+        const screenshotBtn = document.getElementById('screenshotBtn');
+        const refreshBtn = document.getElementById('refreshDevices');
+        const deviceScreen = document.getElementById('deviceScreen');
+        
+        // Socket.IO event handlers (if available)
+        if (socket) {
+            socket.on('connect', function() {
+                console.log('Connected to server via WebSocket');
+                socketConnected = true;
+                loadDevices();
+            });
+            
+            socket.on('devices_list', function(data) {
+                displayDevices(data.devices);
+            });
+            
+            socket.on('screen_update', function(data) {
+                if (data.device_id === selectedDevice) {
+                    updateDeviceScreen(data.image_data);
+                }
+            });
+            
+            socket.on('disconnect', function() {
+                console.log('Disconnected from server');
+                socketConnected = false;
+                updateConnectionStatus('disconnected', 'Connection lost');
+            });
+        } else {
+            // Fallback to polling mode
+            console.log('Using HTTP polling mode');
+            loadDevices();
+        }
+        
+        // Load devices
+        function loadDevices() {
+            refreshBtn.classList.add('spinning');
+            fetch('/api/devices')
+                .then(response => response.json())
+                .then(data => {
+                    displayDevices(data.devices);
+                })
+                .catch(error => {
+                    console.error('Error loading devices:', error);
+                    deviceList.innerHTML = '<div class="alert alert-danger">Error loading devices</div>';
+                })
+                .finally(() => {
+                    refreshBtn.classList.remove('spinning');
+                });
+        }
+        
+        // Display devices in the list
+        function displayDevices(devices) {
+            if (devices.length === 0) {
+                deviceList.innerHTML = `
+                    <div class="alert alert-warning">
+                        <strong>No devices found</strong><br>
+                        Make sure your Android device is:
+                        <ul class="mb-0 mt-2">
+                            <li>Connected via USB</li>
+                            <li>USB debugging enabled</li>
+                            <li>Authorized for debugging</li>
+                        </ul>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '<div class="list-group">';
+            devices.forEach(device => {
+                const isSelected = device === selectedDevice;
+                html += `
+                    <button class="list-group-item list-group-item-action ${isSelected ? 'active' : ''}" 
+                            onclick="selectDevice('${device}')">
+                        <div class="d-flex w-100 justify-content-between">
+                            <h6 class="mb-1">📱 ${device}</h6>
+                            ${isSelected ? '<span class="badge bg-primary">Selected</span>' : ''}
+                        </div>
+                        <small>Android Device</small>
+                    </button>
+                `;
+            });
+            html += '</div>';
+            deviceList.innerHTML = html;
+        }
+        
+        // Select device
+        function selectDevice(deviceId) {
+            selectedDevice = deviceId;
+            loadDevices(); // Refresh to show selection
+            connectBtn.disabled = false;
+            connectBtn.textContent = `📱 Connect to ${deviceId}`;
+        }
+        
+        // Start polling for screenshots (fallback mode)
+        function startScreenPolling() {
+            if (pollInterval) return;
+            
+            pollInterval = setInterval(() => {
+                if (selectedDevice && isConnected) {
+                    fetch(`/api/screenshot/${selectedDevice}`)
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                updateDeviceScreen(data.image_data);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Screenshot polling error:', error);
+                        });
+                }
+            }, 2000); // Poll every 2 seconds
+        }
+        
+        // Stop polling
+        function stopScreenPolling() {
+            if (pollInterval) {
+                clearInterval(pollInterval);
+                pollInterval = null;
+            }
+        }
+        
+        // Connect to device
+        connectBtn.addEventListener('click', function() {
+            if (!selectedDevice) return;
+            
+            updateConnectionStatus('connecting', 'Connecting...');
+            
+            fetch(`/api/connect/${selectedDevice}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        isConnected = true;
+                        updateConnectionStatus('connected', 'Connected');
+                        connectBtn.disabled = true;
+                        disconnectBtn.disabled = false;
+                        screenshotBtn.disabled = false;
+                        
+                        // Show device info
+                        deviceInfo.style.display = 'block';
+                        currentDeviceId.textContent = selectedDevice;
+                        currentStatus.textContent = 'Streaming';
+                        
+                        // Start appropriate mode
+                        if (!socketConnected) {
+                            startScreenPolling();
+                        }
+                    } else {
+                        updateConnectionStatus('disconnected', 'Connection failed');
+                    }
+                })
+                .catch(error => {
+                    console.error('Connection error:', error);
+                    updateConnectionStatus('disconnected', 'Connection error');
+                });
+        });
+        
+        // Disconnect from device
+        disconnectBtn.addEventListener('click', function() {
+            if (!selectedDevice) return;
+            
+            fetch(`/api/disconnect/${selectedDevice}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    isConnected = false;
+                    updateConnectionStatus('disconnected', 'Disconnected');
+                    connectBtn.disabled = false;
+                    disconnectBtn.disabled = true;
+                    screenshotBtn.disabled = true;
+                    
+                    // Hide device info
+                    deviceInfo.style.display = 'none';
+                    
+                    // Stop polling
+                    stopScreenPolling();
+                    
+                    // Clear screen
+                    deviceScreen.innerHTML = `
+                        <div class="no-device">
+                            <h3>📱</h3>
+                            <p>Device disconnected</p>
+                            <small class="text-muted">Select and connect a device to view its screen here</small>
+                        </div>
+                    `;
+                });
+        });
+        
+        // Refresh devices
+        refreshBtn.addEventListener('click', loadDevices);
+        
+        // Update connection status
+        function updateConnectionStatus(status, message) {
+            const indicator = connectionStatus.querySelector('.status-indicator');
+            const text = connectionStatus.querySelector('span:last-child');
+            
+            indicator.className = `status-indicator status-${status}`;
+            text.textContent = message;
+        }
+        
+        // Update device screen
+        function updateDeviceScreen(imageData) {
+            deviceScreen.innerHTML = `<img src="${imageData}" alt="Device Screen" />`;
+        }
+        
+        // Take screenshot manually
+        screenshotBtn.addEventListener('click', function() {
+            if (!selectedDevice) return;
+            
+            screenshotBtn.disabled = true;
+            screenshotBtn.textContent = '📸 Taking...';
+            
+            fetch(`/api/screenshot/${selectedDevice}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        updateDeviceScreen(data.image_data);
+                    } else {
+                        alert('Failed to take screenshot: ' + data.error);
+                    }
+                })
+                .catch(error => {
+                    console.error('Screenshot error:', error);
+                    alert('Screenshot failed');
+                })
+                .finally(() => {
+                    screenshotBtn.disabled = false;
+                    screenshotBtn.textContent = '📸 Take Screenshot';
+                });
+        });
+        
+        // Initial load
+        document.addEventListener('DOMContentLoaded', function() {
+            if (!socket) {
+                loadDevices();
+            }
+        });
+    </script>
+</body>
+</html>
